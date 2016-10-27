@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Data;
 using System.Data.OleDb;
 using System.IO;
@@ -15,15 +16,15 @@ namespace BSIImportExcel
         int _fstRow = 2;
         int _colAgencia = 1;
         int _colConta = 2;
-        string _connString = @"Provider=Microsoft.Jet.OLEDB.4.0;Data Source=local";
         string _sqlString;
+        string _connString;
 
         public Form1()
         {
             InitializeComponent();
 
-            // TODO: remover aqui
-            txtOrigem.Text = @"C:\Users\ale\Desktop\BSI\ImportacaoExcel";
+            txtOrigem.Text = ConfigurationManager.AppSettings["defaultDir"];
+            _connString = ConfigurationManager.ConnectionStrings["accessConnection"].ConnectionString;
             _sqlString = getCmdText();
         }
 
@@ -34,12 +35,15 @@ namespace BSIImportExcel
 
         private void importarArquivo()
         {
+            bool processado;
+
             foreach (var item in getArquivos())
             {
                 Excel.Application appExcel = null;
                 Excel.Workbook workbook = null;
                 Excel.Worksheet workSheet = null;
                 Excel.Range range;
+                processado = false;
 
                 try
                 {
@@ -57,9 +61,13 @@ namespace BSIImportExcel
                             Registro registro = new Registro();
                             registro.Agencia = (range.Cells[i, _colAgencia] as Excel.Range).Value.ToString();
                             registro.Conta = ((Excel.Range)range.Cells[i, _colConta]).Value.ToString();
-                            updateDataBase(registro);
+
+                            // voltar aki
+                            // updateDataBase(registro);
                         }
                     }
+
+                    processado = true;
                 }
                 catch (Exception e)
                 {
@@ -75,14 +83,9 @@ namespace BSIImportExcel
                     releaseObject(workbook);
                     releaseObject(appExcel);
 
-                    try
+                    if (processado == true)
                     {
                         moverArquivoProcessado(item);
-                    }
-                    catch (Exception ep)
-                    {
-                        // TODO: log falha em mover arquivo processado
-                        MessageBox.Show("Falha em mover arquivo processado: " + ep.Message);
                     }
                 }
             }
@@ -97,7 +100,16 @@ namespace BSIImportExcel
             {
                 File.Delete(processado);
             }
-            file.MoveTo(processado);
+
+            try
+            {
+                file.MoveTo(processado);
+            }
+            catch (Exception)
+            {
+                // TODO: log falha em mover arquivo processado
+                MessageBox.Show("Falha em mover arquivo processado");
+            }
         }
 
         private List<string> getArquivos()
@@ -139,7 +151,7 @@ namespace BSIImportExcel
             using (OleDbConnection conn = new OleDbConnection(_connString))
             {
                 conn.Open();
-                using(OleDbCommand cmd = new OleDbCommand(_sqlString, conn))
+                using (OleDbCommand cmd = new OleDbCommand(_sqlString, conn))
                 {
                     cmd.Parameters.AddWithValue("@Agencia", reg.Agencia);
                     cmd.Parameters.AddWithValue("@Conta", reg.Conta);
